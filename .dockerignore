@@ -122,6 +122,7 @@ antigravity-manager-analysis/
 app.__qa_backup/
 .app-build-backup-*/
 .gitnexus
+.tokensave
 .worktrees
 .next-playwright/
 cloud/
