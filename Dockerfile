@@ -124,11 +124,18 @@ RUN --mount=type=cache,id=next-cache,target=/app/.build/next/cache \
 # ── Runner base ────────────────────────────────────────────────────────────
 FROM base AS runner-base
 
+ARG OMNIROUTE_SOURCE_BRANCH="w-main"
+ARG OMNIROUTE_SOURCE_DIRTY="unknown"
+ARG OMNIROUTE_SOURCE_REVISION="unknown"
+
 LABEL org.opencontainers.image.title="omniroute" \
   org.opencontainers.image.description="Unified AI proxy — route any LLM through one endpoint" \
   org.opencontainers.image.url="https://omniroute.online" \
-  org.opencontainers.image.source="https://github.com/diegosouzapw/OmniRoute" \
-  org.opencontainers.image.licenses="MIT"
+  org.opencontainers.image.source="https://github.com/VexloCa/V-OmniRoute" \
+  org.opencontainers.image.revision="${OMNIROUTE_SOURCE_REVISION}" \
+  org.opencontainers.image.licenses="MIT" \
+  com.askway.omniroute.source-branch="${OMNIROUTE_SOURCE_BRANCH}" \
+  com.askway.omniroute.source-dirty="${OMNIROUTE_SOURCE_DIRTY}"
 
 ENV NODE_ENV=production
 ENV PORT=20128
@@ -174,12 +181,17 @@ RUN chown -R node:node /app
 
 EXPOSE 20128
 
+# Windows checkouts can present this shell script to BuildKit with CRLF endings.
+# Normalize the fixed entrypoint while this stage still runs as root so its shebang
+# remains executable inside the Debian runner image.
+COPY --chmod=755 scripts/check-permissions.sh /tmp/check-permissions.sh
+RUN sed -i 's/\r$//' /tmp/check-permissions.sh
+
 # Drop to non-root before ENTRYPOINT/CMD so every derived stage (runner-cli,
 # runner-web) also runs as a non-root user unless they explicitly switch back.
 USER node
 
 # Warns if the mounted data volume has wrong ownership
-COPY --chmod=755 scripts/check-permissions.sh /tmp/check-permissions.sh
 ENTRYPOINT ["/tmp/check-permissions.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
