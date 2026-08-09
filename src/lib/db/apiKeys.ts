@@ -222,6 +222,12 @@ function invalidateCaches() {
   _lastUsedUpdateCache.clear();
 }
 
+/** Invalidates local and Redis authentication state after an external hash-only key mutation. */
+export async function invalidateApiKeyAuthCaches(id: string): Promise<void> {
+  invalidateCaches();
+  await deleteRedisAuthCacheForKeyId(getDbInstance() as ApiKeysDbLike, id);
+}
+
 function toRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" ? (value as JsonRecord) : {};
 }

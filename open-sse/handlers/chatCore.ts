@@ -76,6 +76,7 @@ import { injectSystemPrompt, injectCustomSystemPrompt } from "../services/system
 import { translateRequest, needsTranslation } from "../translator/index.ts";
 import { FORMATS } from "../translator/formats.ts";
 import { collectCustomToolNamesForSourceFormat } from "../translator/request/openai-responses/additionalTools.ts";
+import { recordAskwayRequestObservation } from "@/lib/db/askwayEntitlements";
 import { sanitizeKiroTools } from "../utils/kiroSanitizer.ts";
 import { splitMisplacedToolResults } from "../translator/helpers/claudeHelper.ts";
 import {
@@ -4281,6 +4282,14 @@ export async function handleChatCore({
       comboStrategy,
       endpoint: endpointPath,
     });
+    recordAskwayRequestObservation({
+      requestId: pendingRequestId,
+      apiKeyId: apiKeyInfo?.id,
+      usage,
+      provider,
+      model,
+      latencyMilliseconds: Date.now() - startTime,
+    });
 
     // Translate response to client's expected format (usually OpenAI)
     // Pass toolNameMap so Claude OAuth proxy_ prefix is stripped in tool_use blocks (#605)
@@ -4911,6 +4920,21 @@ export async function handleChatCore({
     !isResponsesEndpoint &&
     !isDroidCLI;
   const streamStateBody = finalBody || body;
+  const persistAskwayBeforeFinalMetadata = (observation: {
+    usage: unknown;
+    costUsd: number;
+    latencyMilliseconds: number;
+  }) => {
+    recordAskwayRequestObservation({
+      requestId: pendingRequestId,
+      apiKeyId: apiKeyInfo?.id,
+      usage: observation.usage,
+      provider,
+      model,
+      latencyMilliseconds: observation.latencyMilliseconds,
+      costUsd: observation.costUsd,
+    });
+  };
 
   if (needsResponsesTranslation) {
     // Provider returns openai-responses, translate to openai (Chat Completions) that clients expect
@@ -4931,7 +4955,10 @@ export async function handleChatCore({
       // openai-responses → openai translation still wants the namespace identity
       // map for #7936-style round-trip closure when the client also speaks
       // Responses (Codex CLI).
-      requestToolIdentityMap
+      false,
+      customToolNames,
+      requestToolIdentityMap,
+      persistAskwayBeforeFinalMetadata
     );
   } else if (needsTranslation(targetFormat, clientResponseFormat)) {
     // Standard translation for other providers
@@ -4961,7 +4988,8 @@ export async function handleChatCore({
         clientResponseFormat,
       }),
       customToolNames,
-      requestToolIdentityMap
+      requestToolIdentityMap,
+      persistAskwayBeforeFinalMetadata
     );
   } else {
     log?.debug?.("STREAM", `Standard passthrough mode`);
@@ -4976,7 +5004,8 @@ export async function handleChatCore({
       apiKeyInfo,
       handleStreamFailure,
       clientResponseFormat,
-      requestToolIdentityMap
+      requestToolIdentityMap,
+      persistAskwayBeforeFinalMetadata
     );
   }
 

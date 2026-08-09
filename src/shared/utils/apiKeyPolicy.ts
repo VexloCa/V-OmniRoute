@@ -31,6 +31,7 @@ import { resolveEndpointCategory } from "@/shared/constants/endpointCategories";
 import { resolveQuotaKeyScope } from "@/lib/quota/quotaKey";
 import { isQuotaModelName, parseQuotaModelName } from "@/lib/quota/quotaModelNaming";
 import { buildApiKeyUsageLimitPolicyRejection } from "@/lib/usage/apiKeyUsageLimits";
+import { validateAskwayEntitlementRequest } from "@/lib/db/askwayEntitlements";
 
 // Default to no per-key request cap. API keys can still opt into explicit
 // limits via Settings/API Keys, while provider/account quota controls remain
@@ -443,6 +444,16 @@ function validateKeyStatus(context: PolicyContext): Response | null {
   return null;
 }
 
+function validateAskwayEntitlement(context: PolicyContext): Response | null {
+  if (!context.apiKeyInfo.id) return null;
+  const result = validateAskwayEntitlementRequest(
+    context.apiKeyInfo.id,
+    context.request.headers.get("x-askway-entitlement-id")
+  );
+  if (!result || result.allowed) return null;
+  return errorResponse(result.status, result.message);
+}
+
 async function validateKeyScheduleAndUsage(context: PolicyContext): Promise<Response | null> {
   const { request, apiKey, apiKeyInfo } = context;
   if (apiKeyInfo.accessSchedule?.enabled && !isWithinSchedule(apiKeyInfo.accessSchedule)) {
@@ -673,6 +684,8 @@ export async function enforceApiKeyPolicy(
   const context = { request, apiKey, apiKeyInfo, modelStr };
   const statusRejection = validateKeyStatus(context);
   if (statusRejection) return { apiKey, apiKeyInfo, rejection: statusRejection };
+  const entitlementRejection = validateAskwayEntitlement(context);
+  if (entitlementRejection) return { apiKey, apiKeyInfo, rejection: entitlementRejection };
   const scheduleRejection = await validateKeyScheduleAndUsage(context);
   if (scheduleRejection) return { apiKey, apiKeyInfo, rejection: scheduleRejection };
   const endpointRejection = validateEndpointAccess(context);

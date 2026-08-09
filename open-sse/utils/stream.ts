@@ -144,6 +144,13 @@ type StreamOptions = {
   apiKeyInfo?: unknown;
   body?: unknown;
   onComplete?: ((payload: StreamCompletePayload) => void) | null;
+  beforeFinalMetadata?:
+    | ((payload: {
+        usage: unknown;
+        costUsd: number;
+        latencyMilliseconds: number;
+      }) => void | Promise<void>)
+    | null;
   onFailure?: ((payload: StreamFailurePayload) => boolean | void | Promise<void>) | null;
   /**
    * Request-scoped `{namespace, name}` ledger for Responses namespace child
@@ -682,6 +689,7 @@ export function createSSEStream(options: StreamOptions = {}) {
     apiKeyInfo = null,
     body = null,
     onComplete = null,
+    beforeFinalMetadata = null,
     onFailure = null,
     dropResponsesCommentary,
     customToolNames = new Set<string>(),
@@ -1043,6 +1051,13 @@ export function createSSEStream(options: StreamOptions = {}) {
     finalUsage: UsageTokenRecord | Record<string, unknown> | null | undefined
   ) => {
     const costUsd = finalUsage ? await calculateCost(provider, model, finalUsage) : 0;
+    if (beforeFinalMetadata) {
+      await beforeFinalMetadata({
+        usage: finalUsage,
+        costUsd,
+        latencyMilliseconds: Date.now() - streamStartedAt,
+      });
+    }
     const comment = buildOmniRouteSseMetadataComment({
       provider,
       model,
@@ -2830,7 +2845,8 @@ export function createSSETransformStreamWithLogger(
   copilotCompatibleReasoning = false,
   suppressThinkClose = false,
   customToolNames: ReadonlySet<string> = new Set(),
-  requestToolIdentityMap: Map<string, { namespace: string; name: string }> | null = null
+  requestToolIdentityMap: Map<string, { namespace: string; name: string }> | null = null,
+  beforeFinalMetadata: StreamOptions["beforeFinalMetadata"] = null
 ) {
   return createSSEStream({
     mode: STREAM_MODE.TRANSLATE,
@@ -2849,6 +2865,7 @@ export function createSSETransformStreamWithLogger(
     suppressThinkClose,
     customToolNames,
     requestToolIdentityMap,
+    beforeFinalMetadata,
   });
 }
 
@@ -2863,7 +2880,8 @@ export function createPassthroughStreamWithLogger(
   apiKeyInfo: unknown = null,
   onFailure: ((payload: StreamFailurePayload) => void | Promise<void>) | null = null,
   clientResponseFormat: string | null = null,
-  requestToolIdentityMap: Map<string, { namespace: string; name: string }> | null = null
+  requestToolIdentityMap: Map<string, { namespace: string; name: string }> | null = null,
+  beforeFinalMetadata: StreamOptions["beforeFinalMetadata"] = null
 ) {
   return createSSEStream({
     mode: STREAM_MODE.PASSTHROUGH,
@@ -2878,6 +2896,7 @@ export function createPassthroughStreamWithLogger(
     onFailure,
     clientResponseFormat,
     requestToolIdentityMap,
+    beforeFinalMetadata,
   });
 }
 
