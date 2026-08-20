@@ -1,6 +1,25 @@
 #!/bin/sh
 set -e
 
+# Docker secrets are mounted as files. Resolve the Redis URL at process start so
+# its credential is not embedded in Compose environment metadata or docker inspect.
+if [ -n "${REDIS_URL_FILE:-}" ]; then
+  if [ -n "${REDIS_URL:-}" ]; then
+    echo "REDIS_URL and REDIS_URL_FILE are mutually exclusive" >&2
+    exit 1
+  fi
+  if [ ! -r "$REDIS_URL_FILE" ]; then
+    echo "REDIS_URL_FILE is not readable" >&2
+    exit 1
+  fi
+  REDIS_URL=$(cat "$REDIS_URL_FILE")
+  if [ -z "$REDIS_URL" ]; then
+    echo "REDIS_URL_FILE is empty" >&2
+    exit 1
+  fi
+  export REDIS_URL
+fi
+
 # ── Memory limit override ──────────────────────────────────────────────
 # If OMNIROUTE_MEMORY_MB is set, build NODE_OPTIONS dynamically so the
 # user can tune heap size via environment without editing the Dockerfile.

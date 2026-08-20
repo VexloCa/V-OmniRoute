@@ -1,0 +1,59 @@
+name: ASKWay production image
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: runner-base
+          push: true
+          tags: ghcr.io/vexloca/omniroute:${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            OMNIROUTE_SOURCE_BRANCH=${{ github.event.workflow_run.head_branch }}
+            OMNIROUTE_SOURCE_DIRTY=false
+            OMNIROUTE_SOURCE_REVISION=${{ github.event.workflow_run.head_sha }}
+          cache-from: type=gha,scope=askway-production
+          cache-to: type=gha,mode=max,scope=askway-production
+          provenance: false
+          sbom: true
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ghcr.io/vexloca/omniroute@${{ steps.build.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/vexloca/omniroute
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Record immutable image
+        run: echo "ghcr.io/vexloca/omniroute@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
