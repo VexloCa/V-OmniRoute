@@ -24,6 +24,10 @@ export const FATAL_LOG_PATTERNS = [
   /Unhandled Rejection/i,
   /Uncaught Exception/i,
 ];
+const EXPECTED_OPTIONAL_SQLITE_DRIVER_FAILURES = [
+  /\[DB\] Sync driver 'better-sqlite3' failed to open, will try next driver: Cannot find module 'better-sqlite3'/gi,
+  /\[DB\] Sync driver 'node:sqlite' failed to open, will try next driver: Cannot find module 'node:sqlite'/gi,
+];
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value || "", 10);
@@ -189,8 +193,17 @@ function printLogTail(logs) {
   console.error(logs.trimEnd());
 }
 
+export function findFatalLogPattern(logs) {
+  const relevantLogs = EXPECTED_OPTIONAL_SQLITE_DRIVER_FAILURES.reduce(
+    (remainingLogs, expectedFailure) => remainingLogs.replace(expectedFailure, ""),
+    logs
+  );
+
+  return FATAL_LOG_PATTERNS.find((pattern) => pattern.test(relevantLogs));
+}
+
 function assertNoFatalLogs(logs) {
-  const fatalPattern = FATAL_LOG_PATTERNS.find((pattern) => pattern.test(logs));
+  const fatalPattern = findFatalLogPattern(logs);
   if (fatalPattern) {
     throw new Error(`Packaged Electron app emitted fatal startup logs matching ${fatalPattern}.`);
   }

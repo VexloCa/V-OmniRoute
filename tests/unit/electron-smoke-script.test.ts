@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildSmokeEnv,
   FATAL_LOG_PATTERNS,
+  findFatalLogPattern,
   LINUX_EXECUTABLE_NAMES,
 } from "../../scripts/dev/smoke-electron-packaged.mjs";
 
@@ -46,4 +47,30 @@ test("electron smoke treats Electron process errors as fatal startup logs", () =
       `${log} should match a fatal log pattern`
     );
   }
+});
+
+test("electron smoke permits expected optional SQLite driver fallbacks", () => {
+  const logs = [
+    "[Server] [DB] Sync driver 'better-sqlite3' failed to open, will try next driver: Cannot find module 'better-sqlite3'",
+    "[DB] Sync driver 'node:sqlite' failed to open, will try next driver: Cannot find module 'node:sqlite'",
+    "[Server:err] [DB] Pre-initializing sql.js WASM (synchronous drivers unavailable)...",
+    "[Server] [DB] SQLite database ready: /tmp/omniroute-electron-smoke/storage.sqlite",
+  ].join("\n");
+
+  assert.equal(findFatalLogPattern(logs), undefined);
+});
+
+test("electron smoke still rejects unrelated missing runtime modules", () => {
+  const logs = "Error: Cannot find module 'required-runtime-package'";
+
+  assert.equal(findFatalLogPattern(logs)?.source, "Cannot find module");
+});
+
+test("electron smoke still rejects a fatal code after an expected SQLite fallback", () => {
+  const logs = [
+    "[DB] Sync driver 'better-sqlite3' failed to open, will try next driver: Cannot find module 'better-sqlite3'",
+    "code: MODULE_NOT_FOUND",
+  ].join("\n");
+
+  assert.equal(findFatalLogPattern(logs)?.source, "MODULE_NOT_FOUND");
 });
