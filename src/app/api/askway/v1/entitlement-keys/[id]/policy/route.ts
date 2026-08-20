@@ -13,7 +13,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (authError) return authError;
   try {
     const { id } = await context.params;
-    const body = policyUpdateSchema.parse(await request.json());
+    const parsed = policyUpdateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return contractError(parsed.error);
+    }
+    const body = parsed.data;
     const inspection = await configureAskwayEntitlementCredential(
       id,
       parsePolicy(body.policy),

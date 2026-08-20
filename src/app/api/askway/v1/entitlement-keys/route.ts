@@ -19,7 +19,11 @@ export async function POST(request: Request) {
     );
   }
   try {
-    const body = provisionSchema.parse(await request.json());
+    const parsed = provisionSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return contractError(parsed.error);
+    }
+    const body = parsed.data;
     return NextResponse.json(
       provisionAskwayEntitlementCredential({
         externalEntitlementId: body.externalEntitlementId,
