@@ -71,6 +71,11 @@ rules:
     # Accepted risk, re-review at the next release cycle (added 2026-06-15).
     ignore:
       - deploy-vps.yml
+      # askway-production-image.yml is privileged by design, but the publish job
+      # accepts only a successful push run from this repository and checks out
+      # that exact trusted commit. Fork/PR workflow runs are rejected by the job
+      # guard before package or attestation permissions are available.
+      - askway-production-image.yml
 
   cache-poisoning:
     # zizmor's cache-poisoning audit flags `actions/setup-node` (cache: npm) and
