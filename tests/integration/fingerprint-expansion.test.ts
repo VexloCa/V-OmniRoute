@@ -126,11 +126,12 @@ async function waitForServer(
       );
     }
     try {
-      const response = await fetch(`${baseUrl}/api/monitoring/health`, {
+      const response = await fetch(`${baseUrl}/api/health/ping`, {
         signal: AbortSignal.timeout(5_000),
       });
       if (response.ok) return;
-      lastError = `HTTP ${response.status}`;
+      const body = await response.text().catch(() => "");
+      lastError = `HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ""}`;
     } catch (error: unknown) {
       lastError = error instanceof Error ? error.message : String(error);
     }
