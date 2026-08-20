@@ -199,6 +199,19 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 CMD ["node", "dev/run-standalone.mjs"]
 
+# ── Hardened production runtime ────────────────────────────────────────────
+# ASKWay runs the standalone Node server directly and never invokes npm or
+# npx. Remove npm's bundled dependency tree from the final filesystem so
+# build-time package-manager CVEs are not shipped in the production runtime.
+# Keep runner-base unchanged because runner-cli derives from it and needs npm
+# to install its optional global CLI tools.
+FROM runner-base AS runner-production
+
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
+USER node
+
 # ── Runner Web (web-cookie providers: Gemini Web, Claude Turnstile) ───────────
 #
 #  Two image flavors:
