@@ -23,9 +23,11 @@ set -euo pipefail
 VERSION="${1:?version required}"
 
 # A pre-release VERSION must never grab :latest (callers already short-circuit
-# this, but stay safe as a standalone unit).
+# this, but stay safe as a standalone unit). Drain stdin before returning so
+# synchronous callers do not race the early exit and receive EPIPE while
+# writing their candidate-tag fixture.
 case "$VERSION" in
-  *-*) echo "false"; exit 0 ;;
+  *-*) cat >/dev/null; echo "false"; exit 0 ;;
 esac
 
 # Build the stable candidate set: incoming tags (v-stripped, pre-releases

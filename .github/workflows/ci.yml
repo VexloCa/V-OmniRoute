@@ -591,21 +591,17 @@ jobs:
           cache: npm
       - uses: ./.github/actions/npm-ci-retry
       - run: npm run check:node-runtime
-      # NOTE: the webpack `.build/next/cache` actions/cache step was removed with the
-      # Turbopack switch below — Turbopack does not read/write the webpack cache dir
-      # (its persistent FS cache is still experimental and intentionally NOT enabled),
-      # so restoring the old ~0.5 GB webpack cache would only waste download time.
-      # Rolling back to webpack = revert this commit (cache step comes back with it).
-      #
-      # Turbopack production build (Next 16, stable): benchmarked 1.9× faster than the
-      # webpack pass (9min0s vs 17min15s on a 32-core box; multi-core Rust vs webpack's
-      # single-threaded compile). Standalone output smoke-validated (server boots,
-      # /api/monitoring/health 200). Downstream jobs (e2e ×9, package-artifact,
-      # electron-package-smoke) consume this artifact, so a green run here validates
-      # the Turbopack artifact end-to-end.
+      # The large graph exceeds ubuntu-latest's native-memory headroom under
+      # Turbopack. Keep this hosted-runner build on webpack; dedicated release
+      # runners and Docker builders can continue to opt into Turbopack when they
+      # have sufficient RAM. Downstream jobs consume this standalone artifact.
       - run: npm run build
         env:
-          OMNIROUTE_USE_TURBOPACK: "1"
+          # ubuntu-latest does not have enough native-memory headroom for this
+          # repository's Turbopack graph; the runner cancels it without a JS OOM
+          # because Rust allocations are outside NODE_OPTIONS. Use the supported,
+          # lower-memory webpack fallback on hosted CI.
+          OMNIROUTE_USE_TURBOPACK: "0"
       - name: Archive Next.js build for downstream jobs
         # Use tar so the archive preserves paths relative to CWD (.build/next/...).
         # upload-artifact path-stripping is ambiguous when exclude patterns are used;
