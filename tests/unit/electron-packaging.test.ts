@@ -25,6 +25,26 @@ test("electron build copies standalone runtime dependencies into resources/app/n
   );
 });
 
+test("electron build preserves the rebuilt SQLite driver outside the pruned dependency tree", () => {
+  const electronPackage = JSON.parse(readFileSync(join(ROOT, "electron", "package.json"), "utf8"));
+  const extraResources = electronPackage.build?.extraResources;
+
+  assert.ok(Array.isArray(extraResources), "electron build.extraResources must be an array");
+  assert.deepEqual(
+    extraResources.find(
+      (resource) => resource?.from === "../.build/electron-standalone/node_modules/better-sqlite3"
+    ),
+    {
+      from: "../.build/electron-standalone/node_modules/better-sqlite3",
+      to: "app/native-node-modules/better-sqlite3",
+      filter: ["**/*"],
+    }
+  );
+
+  const mainSource = readFileSync(join(ROOT, "electron", "main.js"), "utf8");
+  assert.match(mainSource, /addEntry\(path\.join\(NEXT_SERVER_PATH, "native-node-modules"\)\)/);
+});
+
 test("electron standalone assembly normalizes Turbopack hashed external imports", () => {
   const prepareScript = readFileSync(
     join(ROOT, "scripts", "build", "prepare-electron-standalone.mjs"),

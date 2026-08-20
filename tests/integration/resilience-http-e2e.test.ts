@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const TEST_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "omniroute-resilience-http-e2e-"));
-const DASHBOARD_PORT = await getFreePort();
+let dashboardPort = 0;
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 process.env.DATA_DIR = TEST_DATA_DIR;
@@ -132,14 +132,22 @@ function createFakeOpenAiRelay() {
 
   return {
     async start() {
-      const port = await getFreePort();
-      await new Promise<void>((resolve, reject) => {
-        server = http.createServer((req, res) => {
-          void handleRequest(req, res);
-        });
-        server.once("error", reject);
-        server.listen(port, "127.0.0.1", () => resolve());
+      const relayServer = http.createServer((req, res) => {
+        void handleRequest(req, res);
       });
+      server = relayServer;
+      await new Promise<void>((resolve, reject) => {
+        relayServer.once("error", reject);
+        // Let the kernel reserve and bind the relay port atomically. Calling
+        // getFreePort() first creates a close/reopen window in which another
+        // subprocess can claim the same port on a loaded CI runner.
+        relayServer.listen(0, "127.0.0.1", () => resolve());
+      });
+      const address = relayServer.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Failed to determine fake relay port");
+      }
+      const { port } = address;
       baseUrl = `http://127.0.0.1:${port}/v1`;
       return baseUrl;
     },
@@ -459,6 +467,9 @@ const TOKENS = {
 
 test.before(async () => {
   const fakeBaseUrl = await relay.start();
+  // Allocate the dashboard only after the relay owns its port, so the two
+  // servers cannot receive the same recently released ephemeral port.
+  dashboardPort = await getFreePort();
 
   relay.configureToken(TOKENS.p1, {
     defaultResponse: buildCompletion("primary healthy again"),
@@ -531,7 +542,7 @@ test.before(async () => {
 
   core.closeDbInstance();
 
-  app = createServerProcess(TEST_DATA_DIR, DASHBOARD_PORT);
+  app = createServerProcess(TEST_DATA_DIR, dashboardPort);
   await waitForServer(app.baseUrl, app);
 
   await patchResilience(app.baseUrl, buildResilienceConfig());

@@ -121,6 +121,10 @@ function resolveServerNodePath(env = process.env) {
   // app.asar.unpacked, while the standalone bundle still carries helper deps
   // such as bindings/file-uri-to-path inside resources/app/node_modules.
   addEntry(path.join(process.resourcesPath, "app.asar.unpacked", "node_modules"));
+  // Keep the Electron-ABI rebuild outside the dependency tree that
+  // electron-builder prunes. This directory is copied as an explicit resource
+  // and takes precedence over any traced Node-ABI copy in the standalone app.
+  addEntry(path.join(NEXT_SERVER_PATH, "native-node-modules"));
   addEntry(path.join(NEXT_SERVER_PATH, "node_modules"));
 
   return entries.join(path.delimiter);

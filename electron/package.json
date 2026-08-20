@@ -81,6 +81,13 @@
         ]
       },
       {
+        "from": "../.build/electron-standalone/node_modules/better-sqlite3",
+        "to": "app/native-node-modules/better-sqlite3",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "assets",
         "to": "assets",
         "filter": [
